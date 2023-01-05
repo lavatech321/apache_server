@@ -30,8 +30,11 @@
 
       - name: Restart service
         service:
-          name: httpd
+          name: "{{ item }}"
           state: started
+        loop:
+          - httpd
+          - firewalld
  
       - name: Enable firewall services for httpd
         firewalld:
