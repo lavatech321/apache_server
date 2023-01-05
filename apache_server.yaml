@@ -1,0 +1,83 @@
+---
+- name: "Apache server installation"
+  hosts: localhost
+  gather_facts: yes
+  vars_files:
+    - vars.yaml
+
+  tasks:
+    - block:
+      - name: Package installation
+        yum:
+          name: "{{ item }}"
+          state: present
+        loop:  "{{ packages }}"
+
+      - name: Configuration setting
+        template:
+          src: webserver.conf.j2
+          dest: /etc/httpd/conf.d/webserver.conf
+        notify: 
+          - restart_me
+
+      - name: Copy Website code
+        copy: 
+          src: "{{ item }}"
+          dest: "/var/www/html"
+        loop: "{{ code_location }}"
+        notify: 
+          - restart_me
+
+      - name: Restart service
+        service:
+          name: httpd
+          state: started
+ 
+      - name: Enable firewall services for httpd
+        firewalld:
+          port: "{{ item }}"
+          permanent: yes
+          state: enabled
+          immediate: yes
+        loop: "{{ firewall_settings }}"
+
+      - name: Put SELinux in permissive mode
+        selinux:
+          policy: targeted
+          state: permissive
+
+      rescue:
+      - name: Apache Package uninstallation
+        yum:
+          name: "{{ item }}"
+          state: absent
+        when: item not in ["firewalld", "python3-firewall"]
+        loop:  "{{ packages }}"
+
+      - name: Remove configuration setting
+        file:
+          dest: /etc/httpd/conf.d/webserver.conf
+          state: absent
+
+      - name: Remove Website code
+        file: 
+          dest: "/var/www/html/{{ item }}"
+          state: absent
+        loop: "{{ code_location }}"
+
+      - name: Disable firewall services for httpd
+        firewalld:
+          port: "{{ item }}"
+          permanent: no
+          state: disabled
+          immediate: no
+        loop: "{{ firewall_settings }}"
+
+  handlers:   
+    - name: restart_me
+      service:
+        name: httpd
+        state: reloaded
+...
+
+
